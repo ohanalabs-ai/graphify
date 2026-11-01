@@ -1,0 +1,51 @@
+####
+#### OhanaLabs Vionix integration of Graphify-Labs/graphify — the two images this fork publishes.
+#### (Not upstream: an OhanaLabs-only file at the repo root; see ohanalabs/README.md for the upstream sync procedure.)
+####
+####   docker compose -f docker-compose.yaml build                       # both images, local
+####   docker compose -f docker-compose.yaml run --rm graphify extract /workspace/<repo> --code-only
+####   docker compose -f docker-compose.yaml --profile smoke run --rm smoke     # both images: extract + MCP query
+####
+#### CI: .github/workflows/vionix-docker-graphify.yaml and vionix-docker-graphify-mcp.yaml call
+#### ohanalabs-ai/github-platform docker-multiarch-cicd.yaml with `docker-compose-target-service` = one service below
+#### → ghcr.io/ohanalabs-ai/graphify/<service>:<branch>-<sha7> (vionix/main → vionix-main-<sha7>).
+####
+x-build-args: &build-args
+  GRAPHIFY_UPSTREAM_VERSION: ${GRAPHIFY_UPSTREAM_VERSION:-0.9.100}
+  VCS_REF: ${VCS_REF:-local}
+
+services:
+  # The CLI/runtime — vionix-engram worker + memoryworker build FROM it (graphify extract / merge-graphs / export).
+  graphify:
+    build:
+      context: .
+      dockerfile: ohanalabs/docker/graphify.Dockerfile
+      args: *build-args
+    image: ghcr.io/ohanalabs-ai/graphify/graphify
+    volumes:
+      - ./data:/workspace
+
+  # The MCP query server (Streamable HTTP, multi-project via project_path) — Engram's engram-graphify-mcp.
+  graphify-mcp:
+    build:
+      context: .
+      dockerfile: ohanalabs/docker/graphify-mcp.Dockerfile
+      args: *build-args
+    image: ghcr.io/ohanalabs-ai/graphify/graphify-mcp
+    ports:
+      - "${GRAPHIFY_MCP_PORT:-18480}:8080" # host port configurable (8080 is often taken locally)
+    volumes:
+      - ./data:/workspace
+
+  # One-shot smoke test of BOTH images (ohanalabs/docker/smoke.sh): extract a fixture with the CLI image, then ask the
+  # MCP image graph_stats + query_graph with project_path — the exact JSON-RPC request Engram's mcpproxy sends.
+  smoke:
+    profiles: [smoke]
+    image: ghcr.io/ohanalabs-ai/graphify/graphify
+    depends_on: [graphify-mcp]
+    entrypoint: ["bash", "/smoke/smoke.sh"]
+    environment:
+      MCP_URL: http://graphify-mcp:8080/mcp
+    volumes:
+      - ./ohanalabs/docker/smoke.sh:/smoke/smoke.sh:ro
+      - ./data:/workspace

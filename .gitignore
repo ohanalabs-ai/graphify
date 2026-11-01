@@ -45,3 +45,6 @@ paper/
 # .csproj files on open
 tests/fixtures/**/obj/
 tests/fixtures/**/bin/
+
+# OhanaLabs local compose workspace (docker-compose.yaml)
+/data/
