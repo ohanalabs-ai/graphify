@@ -25,8 +25,12 @@ ENV PATH="$VIRTUAL_ENV/bin:$PATH"
 WORKDIR /src
 COPY pyproject.toml README.md LICENSE LICENSE-MIT NOTICE /src/
 COPY graphify /src/graphify
+COPY ohanalabs/traversal /src/ohanalabs-traversal
+# OhanaLabs-only, opt-in: `ohanalabs-traversal` (structured traversal for a live UI animation, :8081) — the default
+# entrypoint stays the upstream MCP server; Engram's interface is untouched (ohanalabs/traversal/README.md).
 RUN pip install --upgrade pip setuptools wheel \
-    && pip install ".[mcp]"
+    && pip install ".[mcp]" \
+    && pip install --no-deps /src/ohanalabs-traversal
 
 FROM ${PYTHON_IMAGE} AS runtime
 ARG GRAPHIFY_UPSTREAM_VERSION=unknown
@@ -48,6 +52,6 @@ RUN addgroup --gid 10001 app \
     && adduser --uid 10001 --gid 10001 --disabled-password --gecos "" app
 USER 10001:10001
 WORKDIR /workspace
-EXPOSE 8080
+EXPOSE 8080 8081
 ENTRYPOINT ["python", "-m", "graphify.serve"]
 CMD ["--transport", "http", "--host", "0.0.0.0", "--port", "8080", "--stateless", "--json-response"]

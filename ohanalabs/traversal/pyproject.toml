@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=83.0.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ohanalabs-traversal"
+version = "0.1.0"
+description = "OhanaLabs-only: structured graph traversal (seeds, ordered visits, depth, edges) for graphify graphs — the walk query_graph performs, as data, for a live UI animation. Does not change graphify."
+requires-python = ">=3.10"
+license = "Apache-2.0"
+# graphifyy is installed by the image (this checkout); pinned to SUPPORTED_UPSTREAM in ohanalabs_traversal/trace.py.
+dependencies = ["starlette", "uvicorn"]
+
+[project.scripts]
+ohanalabs-traversal = "ohanalabs_traversal.http:main"
+
+[tool.setuptools]
+packages = ["ohanalabs_traversal"]
