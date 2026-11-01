@@ -30,6 +30,12 @@ on:
       - "docker-compose.yaml"
       - ".dockerignore"
   workflow_dispatch:
+    inputs:
+      platforms:
+        description: "Image platforms — linux/amd64 (default: the cluster's nodes; Macs run it through their Linux VM) or both, when an arm64 build is really needed"
+        type: choice
+        options: [linux/amd64, "linux/amd64,linux/arm64"]
+        default: linux/amd64
 
 jobs:
   docker-multiarch:
@@ -44,9 +50,11 @@ jobs:
       pull-requests: write
     with:
       registry: ghcr.io
-      # the extras (graspologic, lxml, grpcio, psycopg, Pillow, …) install under QEMU for linux/arm64 — the reusable's default 10 min cancelled the first PR build at the build step (graphify-service shipped amd64-only for this reason)
-      github-job-timeout-minutes: 60
-      platforms: linux/amd64,linux/arm64
+      # amd64 ONLY by default (owner 2026-11-01: "don't waste resources on the mac version" — the clusters are amd64 and a
+      # Mac runs the linux/amd64 image through its Linux VM). arm64 doubles the build: the extras (graspologic, lxml, grpcio,
+      # psycopg, Pillow, …) compile under QEMU (~21 min). Dispatch with platforms=linux/amd64,linux/arm64 when one is needed.
+      github-job-timeout-minutes: ${{ contains(inputs.platforms || 'linux/amd64', 'arm64') && 60 || 20 }}
+      platforms: ${{ inputs.platforms || 'linux/amd64' }}
       docker-compose-target-service: graphify
       image-name-suffix: graphify
       docker-compose-file-name: docker-compose.yaml
