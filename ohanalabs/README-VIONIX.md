@@ -16,8 +16,9 @@ Upstream code is untouched; every OhanaLabs file lives **outside the `graphify/`
 ## Branches
 
 - **`vionix/main`** — the integration branch = an upstream **release tag** (today `v0.9.100`) + the OhanaLabs files.
-  Images: `ghcr.io/ohanalabs-ai/graphify/<image>:vionix-main-<sha7>` (the reusable slugifies `vionix/main`), multi-arch
-  `linux/amd64,linux/arm64`, with SBOM + SLSA provenance. Pin them by that tag (+ digest where a mechanism needs one).
+  Images: `ghcr.io/ohanalabs-ai/graphify/<image>:vionix-main-<sha7>` (the reusable slugifies `vionix/main`), `graphify` is
+  **linux/amd64 only by default** (owner 2026-11-01: a Mac runs it through its Linux VM; dispatch the workflow with
+  `platforms=linux/amd64,linux/arm64` when an arm64 build is really needed), `graphify-mcp` multi-arch, with SBOM + SLSA provenance. Pin them by that tag (+ digest where a mechanism needs one).
 - Feature work → PRs into `vionix/main` (PR images `…/<image>/pr/<n>:<sha7>`, deleted on close).
 - `v8` mirrors upstream; never commit OhanaLabs files there; never push to `Graphify-Labs/*`.
 
