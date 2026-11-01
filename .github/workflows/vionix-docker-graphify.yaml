@@ -44,6 +44,8 @@ jobs:
       pull-requests: write
     with:
       registry: ghcr.io
+      # the extras (graspologic, lxml, grpcio, psycopg, Pillow, …) install under QEMU for linux/arm64 — the reusable's default 10 min cancelled the first PR build at the build step (graphify-service shipped amd64-only for this reason)
+      github-job-timeout-minutes: 60
       platforms: linux/amd64,linux/arm64
       docker-compose-target-service: graphify
       image-name-suffix: graphify

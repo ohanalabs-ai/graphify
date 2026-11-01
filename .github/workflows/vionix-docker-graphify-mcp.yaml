@@ -43,6 +43,8 @@ jobs:
       pull-requests: write
     with:
       registry: ghcr.io
+      # the mcp-only image took 9 min multi-arch on the first PR build — too close to the reusable's default 10
+      github-job-timeout-minutes: 30
       platforms: linux/amd64,linux/arm64
       docker-compose-target-service: graphify-mcp
       image-name-suffix: graphify-mcp
