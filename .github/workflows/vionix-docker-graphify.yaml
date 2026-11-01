@@ -1,0 +1,53 @@
+name: 🐳 vionix docker (graphify)
+run-name: "🐳 graphify CLI image — ${{ github.event_name == 'pull_request' && format('PR #{0} {1}', github.event.pull_request.number, github.event.pull_request.head.sha) || github.ref_name }}"
+
+# OhanaLabs Vionix integration (not upstream). Builds the `graphify` CLI/runtime image — the base vionix-engram's
+# worker + memoryworker build FROM — via the shared reusable ohanalabs-ai/github-platform docker-multiarch-cicd.yaml
+# from the compose service `graphify` (ohanalabs/docker/graphify.Dockerfile):
+#   PR → ghcr.io/ohanalabs-ai/graphify/graphify/pr/<n>:<sha7> (deleted on close) · merge/push to vionix/main →
+#   ghcr.io/ohanalabs-ai/graphify/graphify:vionix-main-<sha7> (+ SBOM, SLSA provenance by the reusable).
+# Path-filtered to the package + the OhanaLabs build inputs. GHCR only (no Docker Hub secret ever passes through
+# job outputs — vionix-engram PR 24).
+
+on:
+  pull_request:
+    branches: [vionix/main]
+    types: [opened, synchronize, reopened, closed]
+    paths:
+      - ".github/workflows/vionix-docker-graphify.yaml"
+      - "graphify/**"
+      - "pyproject.toml"
+      - "ohanalabs/docker/graphify.Dockerfile"
+      - "docker-compose.yaml"
+      - ".dockerignore"
+  push:
+    branches: [vionix/main]
+    paths:
+      - ".github/workflows/vionix-docker-graphify.yaml"
+      - "graphify/**"
+      - "pyproject.toml"
+      - "ohanalabs/docker/graphify.Dockerfile"
+      - "docker-compose.yaml"
+      - ".dockerignore"
+  workflow_dispatch:
+
+jobs:
+  docker-multiarch:
+    name: 🐳 docker (graphify)
+    uses: ohanalabs-ai/github-platform/.github/workflows/docker-multiarch-cicd.yaml@main
+    permissions:
+      contents: write
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+      pull-requests: write
+    with:
+      registry: ghcr.io
+      # the extras (graspologic, lxml, grpcio, psycopg, Pillow, …) install under QEMU for linux/arm64 — the reusable's default 10 min cancelled the first PR build at the build step (graphify-service shipped amd64-only for this reason)
+      github-job-timeout-minutes: 60
+      platforms: linux/amd64,linux/arm64
+      docker-compose-target-service: graphify
+      image-name-suffix: graphify
+      docker-compose-file-name: docker-compose.yaml
+      push-attestations: false

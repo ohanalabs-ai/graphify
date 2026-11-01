@@ -1,0 +1,60 @@
+name: 🧪 vionix smoke (graphify + graphify-mcp)
+run-name: "🧪 graphify images smoke — ${{ github.event_name == 'pull_request' && format('PR #{0}', github.event.pull_request.number) || github.ref_name }}"
+
+# OhanaLabs Vionix integration (not upstream). Builds BOTH images locally on the runner (amd64) and runs
+# ohanalabs/docker/smoke.sh through docker compose: `graphify extract --code-only` on a fixture with the CLI image,
+# then `graph_stats` + `query_graph` with `project_path` against the MCP image — the exact JSON-RPC request
+# vionix-engram's mcpproxy sends. Fails the PR if either image cannot do Engram's job. No registry, no secrets.
+
+on:
+  pull_request:
+    branches: [vionix/main]
+  push:
+    branches: [vionix/main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: vionix-smoke-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: 🧪 smoke — extract + MCP query_graph (Engram's request)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - name: 🐳 build graphify + graphify-mcp
+        run: docker compose -f docker-compose.yaml build graphify graphify-mcp
+      - name: 🧪 smoke (compose profile smoke)
+        run: |
+          set -o pipefail # the tee must not mask a smoke failure
+          mkdir -p data && chmod 0777 data
+          docker compose -f docker-compose.yaml --profile smoke run --rm smoke 2>&1 | tee "$RUNNER_TEMP/smoke.log"
+      - name: 🧭 traversal tests (ohanalabs-traversal parity with upstream query_graph)
+        run: |
+          set -o pipefail
+          docker run --rm --user 0 -v "$PWD/ohanalabs:/o" --entrypoint sh ghcr.io/ohanalabs-ai/graphify/graphify-mcp \
+            -c 'pip install -q pytest httpx && cd /tmp && python -m pytest -q -p no:cacheprovider /o/traversal/tests' \
+            2>&1 | tee -a "$RUNNER_TEMP/smoke.log"
+      - name: 📝 run summary
+        if: always()
+        uses: actions/github-script@ed597411d8f924073f98dfc5c65a23a2325f34cd # v8
+        env:
+          STATUS: ${{ job.status }}
+        with:
+          script: |
+            const fs = require('node:fs');
+            const p = `${process.env.RUNNER_TEMP}/smoke.log`;
+            const log = fs.existsSync(p) ? fs.readFileSync(p, 'utf8').split('\n').filter((l) => /^(==>|ok |FAIL|RPC|TOOL|\d+ (passed|failed))/.test(l)).join('\n') : '(no smoke log — the build step failed)';
+            await core.summary
+              .addHeading('🧪 graphify images smoke')
+              .addRaw(`Result: **${process.env.STATUS}** — CLI \`graphify extract --code-only\` + MCP \`graph_stats\`/\`query_graph\` with \`project_path\` (Engram's request).\n\n`)
+              .addCodeBlock(log, 'text')
+              .write();
+      - name: 🧹 down
+        if: always()
+        run: docker compose -f docker-compose.yaml --profile smoke down || true
