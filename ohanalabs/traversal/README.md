@@ -27,14 +27,23 @@ returns:
 image (`--entrypoint ohanalabs-traversal`, default `:8081`), reading the same cached graphs
 (`<project_path>/graphify-out/graph.json`) only under `--root` (`TRAVERSAL_ROOT`), optional `X-API-Key`
 (`OHANALABS_TRAVERSAL_API_KEY`):
-- `POST /v1/trace` `{project_path, question, mode?, depth? (1..6)}` → the JSON above;
+- `POST /v1/trace` `{project_path, question, mode?, depth? (1..6), demote_docs? (default true)}` → the JSON above;
 - `GET /v1/trace/stream?project_path=&question=&delay_ms=` → SSE `start` · `seed` · `visit` (node + its discovery
   edge, in order) · `edge` (induced) · `done` (count + the answer text) — drive the animation straight from it.
 In Kubernetes it would be a second container (or a second Deployment) next to `engram-graphify-mcp` — not wired yet.
 
+## Ranking parity (upstream >= 0.9.101)
+
+Upstream now ranks source above tests/docs/config (soft weight `_QUERY_DEMOTE_WEIGHT`, via `_query_path_weight`) and
+renders the text in that score order (`_subgraph_to_text(scores=)`). The wrapper passes the same `path_weight` and
+`scores`, so by default it traces the walk `query_graph` performs (default `demote_docs=True`). `demote_docs=False`
+(HTTP `demote_docs`) mirrors the MCP `demote_docs:false` / CLI `--no-doc-demotion` opt-out for docs-first corpora; both
+paths are parity-tested. We deliberately did NOT opt out globally: Engram's queries are about code, and the
+animation must match what the MCP answers.
+
 ## Brittleness across upstream upgrades — what is pinned and tested
 
-- It depends on **private** upstream functions, so it is pinned: `SUPPORTED_UPSTREAM` in `core.py` (today `0.9.100`);
+- It depends on **private** upstream functions, so it is pinned: `SUPPORTED_UPSTREAM` in `core.py` (today `0.9.100` and `0.9.106`);
   `test_pinned_upstream_version_is_supported` fails on any other installed version.
 - **Parity tests** (`tests/test_traversal.py`): for BFS and DFS, the trace's seeds equal the `Start: [...]` of upstream's
   own `_query_graph_text`, its node count equals `N nodes found`, and its text equals upstream's body byte for byte;

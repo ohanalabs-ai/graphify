@@ -2,7 +2,7 @@
 
 **OLD** = `ghcr.io/marcellodesales/graphify-service:main-55dbd00` — graphifyy **0.9.18**, what Engram runs today (k8s-infra
 `engram-graphify-mcp`, and the `FROM` of vionix-engram's worker images). Not 0.1.14: `pip show graphifyy` in that image
-says 0.9.18. **NEW** = this branch's images, upstream **0.9.100**.
+says 0.9.18. **NEW** = this branch's images, upstream **0.9.106**.
 
 `compare.py` runs, with both images and into separate copies of each sample repo (untrusted data: shallow-cloned into
 fresh temp dirs, only ever parsed):

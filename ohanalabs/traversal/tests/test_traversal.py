@@ -133,3 +133,15 @@ def test_dfs_replay_matches_upstream_and_respects_depth(project: Path, question:
     got = T.trace(G, question, mode="dfs", depth=2)
     assert all(n["depth"] is not None for n in got["nodes"]), "DFS replay diverged from upstream _dfs (fell back)"
     assert max(n["depth"] for n in got["nodes"]) <= 2
+
+
+@pytest.mark.parametrize("mode", ["bfs", "dfs"])
+@pytest.mark.parametrize("question", QUESTIONS)
+def test_parity_with_query_graph_no_doc_demotion(project: Path, question: str, mode: str):
+    """The opt-out (`demote_docs=False` ≙ upstream MCP `demote_docs:false` / CLI `--no-doc-demotion`) must stay in
+    lockstep with upstream too (upstream ≥ 0.9.101 ranks source above tests/docs by default)."""
+    G, _ = T.load(str(project), root=str(project.parent))
+    want = _s._query_graph_text(G, question, mode=mode, demote_docs=False)
+    got = T.trace(G, question, mode=mode, demote_docs=False)
+    assert got["status"] == "ok"
+    assert got["text"].split("\n\n", 1)[1] == want.split("\n\n", 1)[1]
