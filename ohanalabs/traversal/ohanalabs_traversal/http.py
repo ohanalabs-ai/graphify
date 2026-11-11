@@ -1,6 +1,6 @@
 """OhanaLabs traversal API — a SEPARATE small HTTP service (default :8081) next to the upstream MCP server (:8080).
 
-  POST /v1/trace            {"project_path", "question", "mode"?: "bfs"|"dfs", "depth"?: 1..6}  → the full trace (JSON)
+  POST /v1/trace            {"project_path", "question", "mode"?: "bfs"|"dfs", "depth"?: 1..6, "demote_docs"?: true}  → the full trace (JSON)
   GET  /v1/trace/stream     ?project_path=&question=&mode=&depth=&delay_ms=  → Server-Sent Events for a live
                             animation: `seed` per seed, `visit` per newly discovered node (with its discovery edge),
                             `edge` per induced edge, then `done` (node_count + the exact query_graph text)
@@ -28,7 +28,13 @@ from starlette.routing import Route
 from . import core as _t
 
 
-def _params(d: dict) -> tuple[str, str, str, int]:
+def _flag(v, default: bool = True) -> bool:
+    if v is None:
+        return default
+    return v if isinstance(v, bool) else str(v).lower() not in ("false", "0", "no")
+
+
+def _params(d: dict) -> tuple[str, str, str, int, bool]:
     pp, q = str(d.get("project_path") or ""), str(d.get("question") or "")
     mode = str(d.get("mode") or "bfs")
     depth = int(d.get("depth") or 3)
@@ -36,7 +42,7 @@ def _params(d: dict) -> tuple[str, str, str, int]:
         raise ValueError("project_path and question are required")
     if mode not in ("bfs", "dfs") or not 1 <= depth <= 6:
         raise ValueError("mode must be bfs|dfs and depth 1..6")
-    return pp, q, mode, depth
+    return pp, q, mode, depth, _flag(d.get("demote_docs"))
 
 
 def build_app(root: str, api_key: str | None = None) -> Starlette:
@@ -45,16 +51,16 @@ def build_app(root: str, api_key: str | None = None) -> Starlette:
             return JSONResponse({"error": "unauthorized"}, status_code=401)
         return None
 
-    def run(pp: str, q: str, mode: str, depth: int) -> dict:
+    def run(pp: str, q: str, mode: str, depth: int, demote_docs: bool = True) -> dict:
         G, path = _t.load(pp, root)
-        return _t.trace(G, q, mode=mode, depth=depth, graph_path=path)
+        return _t.trace(G, q, mode=mode, depth=depth, graph_path=path, demote_docs=demote_docs)
 
     async def post_trace(request: Request):
         if (r := denied(request)):
             return r
         try:
-            pp, q, mode, depth = _params(await request.json())
-            return JSONResponse(await asyncio.to_thread(run, pp, q, mode, depth))
+            pp, q, mode, depth, dd = _params(await request.json())
+            return JSONResponse(await asyncio.to_thread(run, pp, q, mode, depth, dd))
         except PermissionError as e:
             return JSONResponse({"error": str(e)}, status_code=403)
         except FileNotFoundError as e:
@@ -66,9 +72,9 @@ def build_app(root: str, api_key: str | None = None) -> Starlette:
         if (r := denied(request)):
             return r
         try:
-            pp, q, mode, depth = _params(dict(request.query_params))
+            pp, q, mode, depth, dd = _params(dict(request.query_params))
             delay = min(max(int(request.query_params.get("delay_ms", "0")), 0), 2000) / 1000
-            res = await asyncio.to_thread(run, pp, q, mode, depth)
+            res = await asyncio.to_thread(run, pp, q, mode, depth, dd)
         except PermissionError as e:
             return JSONResponse({"error": str(e)}, status_code=403)
         except FileNotFoundError as e:

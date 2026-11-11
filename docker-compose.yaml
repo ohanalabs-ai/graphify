@@ -11,7 +11,7 @@
 #### → ghcr.io/ohanalabs-ai/graphify/<service>:<branch>-<sha7> (vionix/main → vionix-main-<sha7>).
 ####
 x-build-args: &build-args
-  GRAPHIFY_UPSTREAM_VERSION: ${GRAPHIFY_UPSTREAM_VERSION:-0.9.100}
+  GRAPHIFY_UPSTREAM_VERSION: ${GRAPHIFY_UPSTREAM_VERSION:-0.9.106}
   VCS_REF: ${VCS_REF:-local}
 
 services:

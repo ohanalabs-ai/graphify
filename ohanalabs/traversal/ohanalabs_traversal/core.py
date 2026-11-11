@@ -24,7 +24,7 @@ from typing import Any
 from graphify import paths as _paths
 from graphify import serve as _s
 
-SUPPORTED_UPSTREAM = ("0.9.100",)
+SUPPORTED_UPSTREAM = ("0.9.100", "0.9.106")
 
 
 def upstream_version() -> str:
@@ -52,21 +52,29 @@ def load(project_path: str, root: str | None = None):
     return _s._load_graph(path), path
 
 
-def select_seeds(G, question: str) -> dict[str, Any]:
-    """Exactly upstream `_query_graph_text`'s keyword path (refusal → terms → scoring → intent guard → seeds)."""
+def select_seeds(G, question: str, *, demote_docs: bool = True) -> dict[str, Any]:
+    """Exactly upstream `_query_graph_text`'s keyword path (refusal → terms → scoring → intent guard → seeds).
+
+    Since upstream 0.9.101+ the scoring is path-weighted: tests, docs, config files and file-less nodes count
+    `_QUERY_DEMOTE_WEIGHT` (source ranks above them) unless the question asks about them. `demote_docs=True` is
+    upstream's default (the MCP `demote_docs` argument / CLI `--no-doc-demotion` is its opposite); we follow it so the
+    animation shows the walk `query_graph` performs by default. The scores are returned (`scores`) because upstream
+    also uses them to order the rendered text (`_subgraph_to_text(scores=)`)."""
     refusal = _s._query_name_refusal(G, question)
     if refusal:
-        return {"status": "refused", "message": refusal, "seeds": [], "terms": []}
+        return {"status": "refused", "message": refusal, "seeds": [], "terms": [], "scores": {}}
     terms = _s._query_terms(question)
-    qs = _s._score_query(G, terms, collect_per_term_seeds=True)
+    qs = _s._score_query(G, terms, collect_per_term_seeds=True,
+                         path_weight=_s._query_path_weight(terms, demote_docs=demote_docs))
     best = qs.best_seed_by_term
     intent = {t for t in best if t in _s._RELATIONAL_INTENT_TERMS}
     if intent and any(t not in _s._RELATIONAL_INTENT_TERMS for t in terms):
         best = {t: nid for t, nid in best.items() if t not in intent}
     seeds = _s._pick_seeds(qs.ranked, G=G, best_seed_by_term=best, term_order=qs.term_order)
     if not seeds:
-        return {"status": "no_match", "message": _s._QUERY_NO_MATCH, "seeds": [], "terms": terms}
-    return {"status": "ok", "message": "", "seeds": list(seeds), "terms": terms}
+        return {"status": "no_match", "message": _s._QUERY_NO_MATCH, "seeds": [], "terms": terms, "scores": {}}
+    return {"status": "ok", "message": "", "seeds": list(seeds), "terms": terms,
+            "scores": {nid: sc for sc, nid in qs.ranked}}
 
 
 def _node(G, nid: str, depth: int | None, parent: str | None, step: int) -> dict[str, Any]:
@@ -96,11 +104,12 @@ def _edge(TG, u: str, v: str, *, discovery: bool, step: int | None) -> dict[str,
 
 
 def trace(G, question: str, *, mode: str = "bfs", depth: int = 3, context_filters: list[str] | None = None,
-          token_budget: int = 2000, graph_path: str | None = None, with_text: bool = True) -> dict[str, Any]:
+          token_budget: int = 2000, graph_path: str | None = None, with_text: bool = True,
+          demote_docs: bool = True) -> dict[str, Any]:
     """Seeds + ordered visits (depth, parent, community) + edges for `question` — the walk `query_graph` performs."""
     if mode not in ("bfs", "dfs"):
         raise ValueError("mode must be bfs or dfs")
-    sel = select_seeds(G, question)
+    sel = select_seeds(G, question, demote_docs=demote_docs)
     out: dict[str, Any] = {"question": question, "mode": mode, "depth": depth, "status": sel["status"],
                            "message": sel["message"], "terms": sel["terms"], "upstream": upstream_version(),
                            "seeds": [], "nodes": [], "edges": []}
@@ -125,7 +134,7 @@ def trace(G, question: str, *, mode: str = "bfs", depth: int = 3, context_filter
     })
     if with_text:  # the exact text query_graph would return for these seeds, to show next to the animation
         out["text"] = _s._render_query(G, question, seeds, mode=mode, depth=depth, token_budget=token_budget,
-                                       context_filters=context_filters, graph_path=graph_path)
+                                       context_filters=context_filters, graph_path=graph_path, scores=sel["scores"])
     return out
 
 def _hub_threshold(TG) -> int:
